@@ -4,6 +4,7 @@
 import typing as t
 
 import inspect
+import os
 from json import JSONDecodeError
 from urllib.parse import urlparse
 from curl_cffi.requests.exceptions import HTTPError, RequestException
@@ -91,7 +92,7 @@ def add_error_context(engine_name: str, error_context: ErrorContext) -> None:
 
 def get_trace(traces):
     for trace in reversed(traces):
-        split_filename: list[str] = trace.filename.split('/')
+        split_filename: list[str] = trace.filename.replace(os.sep, '/').split('/')
         if '/'.join(split_filename[-3:-1]) == 'searx/engines':
             return trace
         if '/'.join(split_filename[-4:-1]) == 'searx/search/processors':
