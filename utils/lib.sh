@@ -411,7 +411,7 @@ install_template() {
     #
     # E.g. the origin of variant 'raw' of /etc/updatedb.conf is::
     #
-    #    ${TEMPLATES}/etc/updatedb.conf:raw
+    #    ${TEMPLATES}/etc/updatedb.conf@raw
     #
     # To install variant 'raw' of /etc/updatedb.conf without evaluated
     # replacements you can use::
@@ -431,7 +431,7 @@ install_template() {
                 shift
                 ;;
             --variant=*)
-                variant=":${i#*=}"
+                variant="@${i#*=}"
                 shift
                 ;;
             *) pos_args+=("$i") ;;
