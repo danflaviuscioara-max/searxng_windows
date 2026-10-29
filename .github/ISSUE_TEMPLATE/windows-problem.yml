@@ -46,7 +46,8 @@ body:
       label: Optional components installed
       multiple: true
       options:
-        - none
+        # "None" is reserved by GitHub issue forms
+        - no optional components
         - mcp
         - fetch
         - browser
