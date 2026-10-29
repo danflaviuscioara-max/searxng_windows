@@ -1,0 +1,52 @@
+name: Windows problem (this fork)
+description: Something in searxng_windows doesn't work on Windows (start-searxng.ps1, MCP server, ...)
+labels: ["windows"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! This form is for problems of the **Windows fork**.
+        A bug that also happens on Linux belongs to [searxng/searxng](https://github.com/searxng/searxng/issues).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / logs
+      description: Console output of start-searxng.ps1 or the error message (remove secrets such as secret_key).
+      render: text
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `.venv\Scripts\python.exe --version`
+      placeholder: Python 3.13.6
+    validations:
+      required: true
+
+  - type: dropdown
+    id: components
+    attributes:
+      label: Optional components installed
+      multiple: true
+      options:
+        - none
+        - mcp
+        - fetch
+        - browser

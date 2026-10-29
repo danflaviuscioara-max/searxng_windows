@@ -1,34 +1,26 @@
-<!-- FILL IN THESE FIELDS .. and delete the comments after reading.
-
-     Use Markdown for formatting ->  https://www.markdowntools.io/cheat-sheet
--->
+<!-- Thanks for contributing to searxng_windows!  Fill in the sections below
+     and delete these comments.  Changes that are not Windows-specific are
+     usually better sent to upstream: https://github.com/searxng/searxng -->
 
 ### What does this PR do?
 
-<!-- Explain the motivation and changes in your pull request.  -->
+<!-- The problem and how this change solves it. -->
 
-### How to test this PR locally?
+### How was it tested?
 
-<!-- Commands to run the tests or instructions to test the changes.  Are there
-     any edge cases (environment, language, or other contexts) to take into
-     account?  -->
+<!-- Windows version, Python version, and what you ran, e.g.:
+     .venv\Scripts\python.exe -m nose2 -s tests/unit
+     .venv\Scripts\python.exe -m unittest discover -s searxng_mcp -t searxng_mcp
+     .\start-searxng.ps1 -Components ... -->
 
 ### Related issues
 
-<!--
-Closes: #234
--->
+<!-- Closes: #123 -->
 
-### Code of Conduct
+### AI use
 
-<!-- ⚠️ Bad AI drivers will be denounced: People who produce bad contributions
-     that are clearly AI (slop) will be blocked for all future contributions.
-     -->
+<!-- AI-assisted contributions are welcome.  Say which tools you used (e.g.
+     Claude Code, Copilot, Cursor) and for which parts, or write "None".  You
+     should understand every change and be able to explain it in review. -->
 
-[AI Policy]: https://github.com/searxng/searxng/blob/master/AI_POLICY.rst
-
-- [ ] **I hereby confirm that this PR conforms with the [AI Policy].**
-
-  If I have used AI tools for working on the changes in this PR, I will
-  attach a list of all AI tools I used and how I used them. I hereby confirm
-  that I haven't used any other tools than the ones I mention below.
+- [ ] I understand all changes in this PR and have disclosed any AI tools I used above.

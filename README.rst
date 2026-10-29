@@ -4,6 +4,7 @@
 .. _Installation guide: https://docs.searxng.org/admin/installation.html
 .. _Configuration guide: https://docs.searxng.org/admin/settings/index.html
 .. _CONTRIBUTING: https://github.com/searxng/searxng/blob/master/CONTRIBUTING.rst
+.. _AI Policy: https://github.com/searxng/searxng/blob/master/AI_POLICY.rst
 .. _LICENSE: https://github.com/searxng/searxng/blob/master/LICENSE
 
 .. figure:: https://raw.githubusercontent.com/searxng/searxng/master/client/simple/src/brand/searxng.svg
@@ -171,6 +172,35 @@ If you have questions or want to connect with others in the community:
 
 Contributing
 ============
+
+Contributing to this fork
+-------------------------
+
+Issues and pull requests for the Windows fork are welcome; the maintainer
+reviews every pull request.
+
+- **Report a problem**: open an issue with the *Windows problem* form.  Bugs
+  that also happen on Linux belong to `searxng/searxng
+  <https://github.com/searxng/searxng/issues>`_.
+- **Send a change**: fork this repository, work on a branch and open a pull
+  request against ``master``.  Keep Windows changes small and close to upstream
+  code, so upstream updates keep merging cleanly; general SearXNG improvements
+  are better sent upstream.
+- **Test it** before you open the pull request:
+
+  .. code:: powershell
+
+     .venv\Scripts\python.exe -m nose2 -s tests/unit
+     .venv\Scripts\python.exe -m unittest discover -s searxng_mcp -t searxng_mcp
+
+  The ``Windows`` GitHub Actions workflow runs the same tests on Python 3.11
+  to 3.14.
+- **AI-assisted contributions are welcome**, as long as you say which tools you
+  used and for what, and you understand every change you submit.  Note that
+  upstream SearXNG has a stricter `AI Policy`_ for contributions sent there.
+
+Contributing to SearXNG
+-----------------------
 
 See CONTRIBUTING_ for more details.
 
