@@ -154,6 +154,8 @@ def get_error_context(
     filename = searx_frame.filename
     if filename.startswith(searx_parent_dir):
         filename = filename[len(searx_parent_dir) + 1 :]
+    # report 'searx/engines/..' also on Windows
+    filename = filename.replace(os.sep, '/')
     function = searx_frame.function
     line_no = searx_frame.lineno
     code = searx_frame.code_context[0].strip()

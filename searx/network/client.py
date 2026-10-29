@@ -6,6 +6,7 @@ import typing as t
 import asyncio
 import logging
 import os
+import sys
 import threading
 
 from curl_cffi import AsyncSession, CurlHttpVersion, CurlOpt
@@ -120,7 +121,12 @@ def init():
 
     def loop_thread():
         global LOOP
-        LOOP = asyncio.new_event_loop()
+        if sys.platform == "win32":
+            # curl_cffi needs add_reader(), which the default ProactorEventLoop
+            # on Windows does not implement
+            LOOP = asyncio.SelectorEventLoop()
+        else:
+            LOOP = asyncio.new_event_loop()
         ready.set()
         LOOP.run_forever()
 
