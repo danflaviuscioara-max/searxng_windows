@@ -51,6 +51,37 @@ for another settings folder and ``-Update`` to reinstall the requirements.
 Valkey (used only by the bot limiter of public instances) is optional and not
 needed on a personal instance.
 
+Using SearXNG with AI agents
+----------------------------
+
+The settings created by ``start-searxng.ps1`` enable the JSON API
+(``/search?q=...&format=json``), which upstream disables by default.  If you
+created your ``settings.yml`` before this, add ``json`` to ``search.formats``.
+
+``searxng_mcp/server.py`` is an `MCP <https://modelcontextprotocol.io>`_
+server that gives agents such as Claude Code or Claude Desktop a ``search``
+tool backed by your local SearXNG.  Install its one dependency once:
+
+.. code:: powershell
+
+   .\.venv\Scripts\python.exe -m pip install -r searxng_mcp\requirements.txt
+
+Add it to Claude Code (run in the repository folder, with SearXNG running):
+
+.. code:: powershell
+
+   claude mcp add searxng -- "$PWD\.venv\Scripts\python.exe" "$PWD\searxng_mcp\server.py"
+
+For other MCP clients, run ``.venv\Scripts\python.exe searxng_mcp\server.py``
+as a stdio server.  ``SEARXNG_URL`` selects another instance (default
+``http://127.0.0.1:8888``).
+
+The tool takes ``query``, ``categories``, ``language``, ``time_range``,
+``page`` and ``max_results`` and returns titles, URLs and short snippets, not
+full pages.  Keep in mind that the search engines behind SearXNG block heavy
+automated use (CAPTCHAs, temporary bans), so an agent that sends many queries
+in a row will see fewer results.
+
 Changes from upstream
 ---------------------
 
@@ -65,6 +96,8 @@ Modified by `danflaviuscioara-max <https://github.com/danflaviuscioara-max>`_, O
   ``\`` separators and are reported as ``searx/engines/..``.
 - ``searx/network/client.py``: use a ``SelectorEventLoop`` on Windows, which
   curl_cffi needs (removes a warning and an extra thread at startup).
+- Added ``searxng_mcp/`` (MCP server for AI agents); the settings created by
+  ``start-searxng.ps1`` enable the JSON API.
 - Added ``start-searxng.ps1``, the Windows regression tests in
   ``tests/unit/test_windows_compat.py`` and the ``Windows`` GitHub Actions
   workflow.

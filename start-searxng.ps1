@@ -125,6 +125,12 @@ use_default_settings: true
 general:
   instance_name: "SearXNG"
 
+search:
+  # json is needed by the MCP server (searxng_mcp) and other API clients
+  formats:
+    - html
+    - json
+
 server:
   # Random key created by start-searxng.ps1 -- keep it secret.
   secret_key: "$(New-SecretKey)"
