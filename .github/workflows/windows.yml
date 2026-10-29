@@ -1,0 +1,90 @@
+---
+name: Windows
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Windows / Python ${{ matrix.python-version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "${{ matrix.python-version }}"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-server.txt -r requirements-dev.txt
+
+      - name: Run unit tests
+        run: python -m nose2 -s tests/unit
+
+  smoke:
+    name: Windows / start-searxng.ps1
+    runs-on: windows-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Start SearXNG and request pages
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'searxng.log'
+          $proc = Start-Process powershell -PassThru -NoNewWindow `
+            -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '.\start-searxng.ps1' `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+          $ready = $false
+          for ($i = 0; $i -lt 300 -and -not $proc.HasExited; $i++) {
+            try {
+              $code = (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8888/healthz).StatusCode
+              if ($code -eq 200) { $ready = $true; break }
+            } catch { Start-Sleep -Seconds 1 }
+          }
+          Get-Content $log, "$log.err" -ErrorAction SilentlyContinue
+          if (-not $ready) { throw 'SearXNG did not start' }
+          foreach ($path in '/', '/preferences', '/static/themes/simple/sxng-ltr.min.css') {
+            $code = (Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8888$path").StatusCode
+            Write-Host "$path -> $code"
+            if ($code -ne 200) { throw "$path returned $code" }
+          }
+          Stop-Process -Id $proc.Id -Force

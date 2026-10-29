@@ -24,24 +24,32 @@ SearXNG is a `metasearch engine`_. Users are neither tracked nor profiled.
 Running on Windows
 ==================
 
-Tested on Windows 11 with Python 3.13.  All 359 unit tests pass.
+Needs Python 3.10 or newer (`python.org <https://www.python.org/downloads/windows/>`_).
+The unit tests run on Windows with Python 3.11 to 3.14 on every push.
 
 .. code:: powershell
 
    git clone https://github.com/danflaviuscioara-max/searxng_windows.git
    cd searxng_windows
-   python -m venv .venv
-   .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-server.txt
-   $env:SEARXNG_SECRET = [guid]::NewGuid().ToString('N')
-   .\.venv\Scripts\python.exe -m searx.webapp
+   powershell -ExecutionPolicy Bypass -File .\start-searxng.ps1
 
-Then open http://127.0.0.1:8888.  This starts the built-in development server,
-which is fine for personal use on your own machine.  To make the secret key
-permanent, set ``server.secret_key`` in your settings file instead of the
-environment variable (see `Configuration guide`_).
+Then open http://127.0.0.1:8888.  On the first run ``start-searxng.ps1``
 
-Valkey (used only by the bot limiter) is optional; leave ``valkey.url`` unset
-on a personal instance.
+- creates a virtual environment in ``.venv`` and installs the requirements
+  (again automatically whenever they change),
+- creates ``%APPDATA%\searxng\settings.yml`` with a random, permanent secret
+  key.  Edit this file to configure SearXNG (see `Configuration guide`_); only
+  the values you want to change are needed there,
+
+and then starts SearXNG with `Granian <https://github.com/emmett-framework/granian>`_,
+the web server the official SearXNG container uses.  Stop it with ``Ctrl+C``.
+
+Options: ``-Port 9000`` to use another port, ``-BindAddress 0.0.0.0`` to make
+SearXNG reachable from other devices in your network, ``-ConfigDir <folder>``
+for another settings folder and ``-Update`` to reinstall the requirements.
+
+Valkey (used only by the bot limiter of public instances) is optional and not
+needed on a personal instance.
 
 Changes from upstream
 ---------------------
@@ -54,7 +62,12 @@ Modified by `danflaviuscioara-max <https://github.com/danflaviuscioara-max>`_, O
 - ``searx/webutils.py``: result-template and static-file names now use ``/``
   on every OS (fixes "Internal Server Error" on every search).
 - ``searx/metrics/error_recorder.py``: engine error paths work with Windows
-  ``\`` separators.
+  ``\`` separators and are reported as ``searx/engines/..``.
+- ``searx/network/client.py``: use a ``SelectorEventLoop`` on Windows, which
+  curl_cffi needs (removes a warning and an extra thread at startup).
+- Added ``start-searxng.ps1``, the Windows regression tests in
+  ``tests/unit/test_windows_compat.py`` and the ``Windows`` GitHub Actions
+  workflow.
 
 Upstream changes are merged in regularly from ``searxng/searxng``.
 
