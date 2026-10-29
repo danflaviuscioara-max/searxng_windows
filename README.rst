@@ -14,6 +14,50 @@
 
 SearXNG is a `metasearch engine`_. Users are neither tracked nor profiled.
 
+.. note::
+
+   **This is searxng_windows, an unofficial fork of** `searxng/searxng
+   <https://github.com/searxng/searxng>`_ **that runs natively on Windows** (no
+   Docker, no WSL).  It is not affiliated with or endorsed by the SearXNG
+   project.  Please report Windows-specific problems here, not upstream.
+
+Running on Windows
+==================
+
+Tested on Windows 11 with Python 3.13.  All 359 unit tests pass.
+
+.. code:: powershell
+
+   git clone https://github.com/danflaviuscioara-max/searxng_windows.git
+   cd searxng_windows
+   python -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-server.txt
+   $env:SEARXNG_SECRET = [guid]::NewGuid().ToString('N')
+   .\.venv\Scripts\python.exe -m searx.webapp
+
+Then open http://127.0.0.1:8888.  This starts the built-in development server,
+which is fine for personal use on your own machine.  To make the secret key
+permanent, set ``server.secret_key`` in your settings file instead of the
+environment variable (see `Configuration guide`_).
+
+Valkey (used only by the bot limiter) is optional; leave ``valkey.url`` unset
+on a personal instance.
+
+Changes from upstream
+---------------------
+
+Modified by `danflaviuscioara-max <https://github.com/danflaviuscioara-max>`_, October 2026 (see the git history for full details):
+
+- ``utils/``: renamed the ``*:socket`` templates to ``*@socket``; Windows does
+  not allow ``:`` in filenames, so the repository could not be checked out.
+- ``searx/valkeydb.py``: removed the Unix-only ``pwd`` / ``os.getuid()`` call.
+- ``searx/webutils.py``: result-template and static-file names now use ``/``
+  on every OS (fixes "Internal Server Error" on every search).
+- ``searx/metrics/error_recorder.py``: engine error paths work with Windows
+  ``\`` separators.
+
+Upstream changes are merged in regularly from ``searxng/searxng``.
+
 .. image:: https://img.shields.io/badge/organization-3050ff?style=flat-square&logo=searxng&logoColor=fff&cacheSeconds=86400
    :target: https://github.com/searxng
    :alt: Organization
@@ -60,3 +104,7 @@ License
 
 This project is licensed under the GNU Affero General Public License (AGPL-3.0).
 See LICENSE_ for more details.
+
+This fork is distributed under the same license.  SearXNG is copyright its
+contributors (see ``AUTHORS.rst``); the Windows changes listed above are also
+released under AGPL-3.0-or-later.
