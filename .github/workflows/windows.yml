@@ -43,7 +43,9 @@ jobs:
         with:
           python-version: "${{ matrix.python-version }}"
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: |
+            requirements*.txt
+            searxng_mcp/requirements.txt
 
       - name: Install requirements
         run: |
@@ -52,6 +54,11 @@ jobs:
 
       - name: Run unit tests
         run: python -m nose2 -s tests/unit
+
+      - name: Run MCP server tests
+        run: |
+          python -m pip install -r searxng_mcp/requirements.txt
+          python -m unittest discover -s searxng_mcp -t searxng_mcp -v
 
   smoke:
     name: Windows / start-searxng.ps1
