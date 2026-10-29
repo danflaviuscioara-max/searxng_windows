@@ -123,7 +123,8 @@ up in your normal browser too.
      covers styles from stylesheets,
    - it puts page text and search results between ``untrusted_web_content``
      markers with a random id, so a page can't fake the end of the tool
-     output, and tells the agent never to follow instructions found there,
+     output, with a note right before and after the content telling the agent
+     to read it as data and never follow instructions found there,
    - it adds a ``WARNING: possible prompt injection`` line when the content
      contains text aimed at AI agents (*"ignore previous instructions"*,
      *"send the API key to ..."*, fake chat-role tags, ...).
