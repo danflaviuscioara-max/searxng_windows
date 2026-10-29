@@ -59,24 +59,39 @@ The settings created by ``start-searxng.ps1`` enable the JSON API
 created your ``settings.yml`` before this, add ``json`` to ``search.formats``.
 
 ``searxng_mcp/server.py`` is an `MCP <https://modelcontextprotocol.io>`_
-server that gives agents such as Claude Code or Claude Desktop two tools:
+server for agents such as Claude Code or Claude Desktop.  It is made of
+optional components; on its first run ``start-searxng.ps1`` asks which ones to
+install (``-Setup`` asks again, ``-Components mcp,fetch`` chooses without
+asking, components you deselect are uninstalled):
 
-- ``search``: web search through your local SearXNG.  Returns titles, URLs
-  and short snippets.
-- ``fetch``: reads the main text of a web page as Markdown, without menus,
-  ads and footers (using `Trafilatura <https://trafilatura.readthedocs.io>`_).
-  Long pages come in parts (``start`` / ``max_chars``).  HTML and text pages
-  only; PDFs, pages that need JavaScript and pages behind a bot check can't be
-  read and return an error saying so.  For safety it refuses ``localhost`` and
-  private network addresses unless ``SEARXNG_MCP_ALLOW_PRIVATE=1`` is set.
+.. list-table::
+   :header-rows: 1
 
-Install its dependencies once:
+   * - Component
+     - Gives agents
+     - Installs
+   * - ``mcp``
+     - ``search``: web search through your SearXNG (titles, URLs, snippets)
+     - MCP SDK
+   * - ``fetch``
+     - ``fetch``: the main text of a web page as Markdown, without menus, ads
+       and footers (long pages in parts: ``start`` / ``max_chars``)
+     - `Trafilatura <https://trafilatura.readthedocs.io>`_
+   * - ``browser``
+     - ``fetch`` can read pages that need JavaScript
+     - Playwright + headless Chromium (about 280 MB)
 
-.. code:: powershell
+Each component needs the one above it.  With ``browser`` installed, ``fetch``
+uses the headless browser automatically when a page has too little text
+without JavaScript (``render="auto"``; ``"always"`` and ``"never"`` force
+it).  The browser does not get around bot protection: a site that answers
+with a bot check is reported as such.
 
-   .\.venv\Scripts\python.exe -m pip install -r searxng_mcp\requirements.txt
-
-Add it to Claude Code (run in the repository folder, with SearXNG running):
+For safety ``fetch`` refuses ``localhost`` and private network addresses,
+including redirects to them and requests made by a page's scripts in the
+browser, unless ``SEARXNG_MCP_ALLOW_PRIVATE=1`` is set.  Nothing is registered
+with Claude automatically.  To add the server to Claude Code, run this
+yourself in the repository folder (SearXNG must be running):
 
 .. code:: powershell
 
@@ -109,7 +124,8 @@ Modified by `danflaviuscioara-max <https://github.com/danflaviuscioara-max>`_, O
 - ``searx/network/client.py``: use a ``SelectorEventLoop`` on Windows, which
   curl_cffi needs (removes a warning and an extra thread at startup).
 - Added ``searxng_mcp/`` (MCP server with ``search`` and ``fetch`` tools for
-  AI agents); the settings created by
+  AI agents, optional components installed by ``start-searxng.ps1``); the
+  settings created by
   ``start-searxng.ps1`` enable the JSON API.
 - Added ``start-searxng.ps1``, the Windows regression tests in
   ``tests/unit/test_windows_compat.py`` and the ``Windows`` GitHub Actions

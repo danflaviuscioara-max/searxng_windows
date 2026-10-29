@@ -33,17 +33,43 @@ ROUTES = {
         b"continue.</p></body></html>",
     ),
     "/missing": (404, "text/html", b"not found"),
+    # content only appears when the script runs
+    "/js": (
+        200,
+        "text/html",
+        b"<html><head><title>JS page</title></head><body><div id='app'></div><script>"
+        b"document.getElementById('app').innerHTML = '<article><h1>Rendered</h1>' + "
+        b"Array.from({length: 30}, (_, i) => '<p>Script paragraph ' + i + ' with enough words to count "
+        b"as real content.</p>').join('') + '</article>';</script></body></html>",
+    ),
+    "/target": (200, "text/html", ARTICLE.replace("Main heading", "Redirect target").encode()),
+    "/secret.js": (200, "text/javascript", b"document.title = 'secret loaded';"),
 }
+
+HITS: list[str] = []
+"""Paths the test server was asked for."""
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        HITS.append(self.path)
+        port = self.server.server_address[1]
         if self.path == "/redirect-local":
             self.send_response(302)
             self.send_header("Location", "http://127.0.0.1:1/secret")
             self.end_headers()
             return
-        code, ctype, body = ROUTES.get(self.path, ROUTES["/missing"])
+        if self.path == "/nav-redirect":
+            # 'localhost' is the host the browser tests treat as private
+            self.send_response(302)
+            self.send_header("Location", f"http://localhost:{port}/target")
+            self.end_headers()
+            return
+        if self.path == "/with-script":
+            body = ARTICLE.replace("</body>", f"<script src='http://localhost:{port}/secret.js'></script></body>")
+            ctype, body, code = "text/html", body.encode(), 200
+        else:
+            code, ctype, body = ROUTES.get(self.path, ROUTES["/missing"])
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -54,7 +80,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-class FetchTests(unittest.TestCase):
+class _ServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -67,9 +93,24 @@ class FetchTests(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
 
-    def fetch(self, path, allow_private=True, **kwargs):
+
+@unittest.skipUnless(server.have_fetch(), "fetch component (trafilatura) not installed")
+class FetchTests(_ServerTestCase):
+    """Plain HTTP fetching, without the headless browser."""
+
+    def fetch(self, path, allow_private=True, render="never", **kwargs):
         with mock.patch.object(server, "ALLOW_PRIVATE", allow_private):
-            return asyncio.run(server.fetch(self.base + path, **kwargs))
+            return asyncio.run(server.fetch(self.base + path, render=render, **kwargs))
+
+    def test_js_page_without_browser_explains(self):
+        with mock.patch.object(server, "have_browser", lambda: False):
+            with self.assertRaisesRegex(server.SearXNGError, "may need JavaScript.*-Setup"):
+                self.fetch("/js", render="auto")
+
+    def test_render_always_without_browser(self):
+        with mock.patch.object(server, "have_browser", lambda: False):
+            with self.assertRaisesRegex(server.SearXNGError, "needs the headless browser"):
+                self.fetch("/article", render="always")
 
     def test_main_text_as_markdown(self):
         out = self.fetch("/article")
@@ -127,6 +168,71 @@ class FetchTests(unittest.TestCase):
                 raise server.SearXNGError(f"redirect target {url} blocked")
 
         return check
+
+
+def _vetted_address_blocking_localhost(host, port):  # pylint: disable=unused-argument
+    """The test server runs on 127.0.0.1; the tests pretend 'localhost' is a
+    private address that must not be reached."""
+    if host == "localhost":
+        raise server.SearXNGError("localhost is a local or private network address (test)")
+    return "127.0.0.1"
+
+
+@unittest.skipUnless(server.have_fetch() and server.have_browser(), "browser component (playwright) not installed")
+class BrowserTests(_ServerTestCase):
+    """Rendering in the headless browser and its network guard."""
+
+    def fetch(self, path, vetted_address=_vetted_address_blocking_localhost, **kwargs):
+        async def run():
+            try:
+                return await server.fetch(self.base + path, **kwargs)
+            finally:
+                await server.BROWSER.close()
+
+        HITS.clear()
+        with mock.patch.object(server, "vetted_address", vetted_address):
+            return asyncio.run(run())
+
+    def test_js_page_rendered_in_auto_mode(self):
+        out = self.fetch("/js")
+        self.assertIn("(rendered in a headless browser)", out)
+        self.assertIn("Script paragraph 0 with enough words", out)
+
+    def test_static_page_not_rendered_in_auto_mode(self):
+        self.assertNotIn("headless browser", self.fetch("/article"))
+
+    def test_redirect_followed_when_target_allowed(self):
+        # control for the next test: the redirect itself works
+        out = self.fetch("/nav-redirect", render="always", vetted_address=lambda host, port: "127.0.0.1")
+        self.assertIn("Redirect target", out)
+        self.assertIn("/target", HITS)
+
+    def test_redirect_to_private_host_blocked(self):
+        with self.assertRaises(server.SearXNGError):
+            self.fetch("/nav-redirect", render="always")
+        self.assertIn("/nav-redirect", HITS)
+        self.assertNotIn("/target", HITS)
+
+    def test_script_from_private_host_blocked(self):
+        out = self.fetch("/with-script", render="always")
+        self.assertIn("Paragraph 0", out)
+        self.assertNotIn("/secret.js", HITS)
+
+    def test_bot_check_still_reported_after_rendering(self):
+        with self.assertRaisesRegex(server.SearXNGError, "bot check.*even in the headless browser"):
+            self.fetch("/challenge")
+
+
+class ServerTests(unittest.TestCase):
+
+    def tools(self):
+        return sorted(t.name for t in asyncio.run(server.create_server().list_tools()))
+
+    def test_fetch_tool_only_with_fetch_component(self):
+        with mock.patch.object(server, "have_fetch", lambda: False):
+            self.assertEqual(self.tools(), ["search"])
+        with mock.patch.object(server, "have_fetch", lambda: True):
+            self.assertEqual(self.tools(), ["fetch", "search"])
 
 
 class CheckUrlTests(unittest.TestCase):

@@ -9,10 +9,15 @@
     - creates a Python virtual environment in .venv and installs the
       requirements (again whenever a requirements file changes),
     - creates a settings file with a random, permanent secret key in
-      %APPDATA%\searxng\settings.yml (only if it does not exist yet).
+      %APPDATA%\searxng\settings.yml (only if it does not exist yet),
+    - asks which optional components for AI agents to install (see
+      -Components) and remembers the answer.
 
     Then it starts SearXNG with the Granian web server, the same server the
     official SearXNG container uses.
+
+    Nothing is registered with Claude or any other AI tool: the script only
+    prints the command to do so yourself.
 
 .PARAMETER Port
     TCP port to listen on (default 8888).
@@ -27,11 +32,26 @@
 .PARAMETER Update
     Reinstall the requirements even if they did not change.
 
+.PARAMETER Setup
+    Ask again which optional components to install.
+
+.PARAMETER Components
+    Choose the optional components without being asked (comma-separated):
+      mcp      MCP server with a search tool for AI agents
+      fetch    + a fetch tool that reads web pages (Trafilatura)
+      browser  + a headless browser for pages that need JavaScript
+               (Playwright and Chromium, about 280 MB)
+      none     no optional components
+    Each component needs the one before it; those are added automatically.
+
 .EXAMPLE
     .\start-searxng.ps1
 
 .EXAMPLE
     .\start-searxng.ps1 -Port 9000 -BindAddress 0.0.0.0
+
+.EXAMPLE
+    .\start-searxng.ps1 -Components mcp,fetch
 #>
 
 [CmdletBinding()]
@@ -39,7 +59,9 @@ param(
     [int]$Port = 8888,
     [string]$BindAddress = '127.0.0.1',
     [string]$ConfigDir = (Join-Path $env:APPDATA 'searxng'),
-    [switch]$Update
+    [switch]$Update,
+    [switch]$Setup,
+    [string[]]$Components
 )
 
 # Not 'Stop': Windows PowerShell 5.1 would turn harmless stderr output of pip
@@ -50,6 +72,26 @@ $VenvDir = Join-Path $RepoRoot '.venv'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
 $Requirements = @('requirements.txt', 'requirements-server.txt') | ForEach-Object { Join-Path $RepoRoot $_ }
 $RequirementsStamp = Join-Path $VenvDir '.sxng-requirements.sha256'
+$ComponentsFile = Join-Path $VenvDir '.sxng-components'
+
+# Optional components for AI agents, in install order; each needs the one before.
+$KnownComponents = [ordered]@{
+    mcp     = @{
+        Requires     = @()
+        Requirements = 'searxng_mcp\requirements.txt'
+        Question     = 'Install the MCP server, so AI agents (Claude Code, Claude Desktop, ...) can search with SearXNG?'
+    }
+    fetch   = @{
+        Requires     = @('mcp')
+        Requirements = 'searxng_mcp\requirements-fetch.txt'
+        Question     = 'Install page reading (Trafilatura), so agents can read the text of web pages?'
+    }
+    browser = @{
+        Requires     = @('fetch')
+        Requirements = 'searxng_mcp\requirements-browser.txt'
+        Question     = 'Install a headless browser (Playwright + Chromium, about 280 MB) for pages that need JavaScript?'
+    }
+}
 
 function Find-Python {
     # Prefer the Python launcher (py.exe), fall back to python.exe on PATH.
@@ -71,6 +113,56 @@ function Find-Python {
         Write-Warning "Python $version found, but SearXNG needs Python 3.10 or newer."
     }
     throw 'Python 3.10 or newer is required. Install it from https://www.python.org/downloads/windows/ and run this script again.'
+}
+
+function Read-YesNo([string]$Question) {
+    while ($true) {
+        $answer = (Read-Host "$Question [y/N]").Trim().ToLower()
+        if ($answer -in @('', 'n', 'no')) { return $false }
+        if ($answer -in @('y', 'yes')) { return $true }
+    }
+}
+
+function Get-SelectedComponents {
+    if ($Components) {
+        $list = @($Components | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ })
+        foreach ($name in $list) {
+            if ($name -ne 'none' -and -not $KnownComponents.Contains($name)) {
+                throw "Unknown component '$name'. Known components: $(@($KnownComponents.Keys) -join ', '), none"
+            }
+        }
+        $list = @($list | Where-Object { $_ -ne 'none' })
+    }
+    elseif (-not $Setup -and (Test-Path $ComponentsFile)) {
+        $raw = Get-Content -Raw $ComponentsFile
+        $list = if ($raw) { @($raw.Trim() -split ',' | Where-Object { $KnownComponents.Contains($_) }) } else { @() }
+    }
+    elseif ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        Write-Host ''
+        Write-Host 'Optional components for AI agents (change later with: .\start-searxng.ps1 -Setup)'
+        $list = @()
+        foreach ($name in $KnownComponents.Keys) {
+            $missing = @($KnownComponents[$name].Requires | Where-Object { $list -notcontains $_ })
+            if ($missing.Count -eq 0 -and (Read-YesNo "  $($KnownComponents[$name].Question)")) {
+                $list += $name
+            }
+        }
+        Write-Host ''
+    }
+    else {
+        $list = @()  # not interactive (e.g. CI): no optional components unless -Components is given
+    }
+
+    # add the components the selected ones need
+    do {
+        $added = $false
+        foreach ($name in @($list)) {
+            foreach ($required in $KnownComponents[$name].Requires) {
+                if ($list -notcontains $required) { $list += $required; $added = $true }
+            }
+        }
+    } while ($added)
+    return @($KnownComponents.Keys | Where-Object { $list -contains $_ })
 }
 
 function Get-RequirementsHash {
@@ -97,9 +189,30 @@ if (-not (Test-Path $VenvPython)) {
     if ($LASTEXITCODE -ne 0) { throw 'Creating the virtual environment failed.' }
 }
 
+$previous = @()
+if (Test-Path $ComponentsFile) {
+    $raw = Get-Content -Raw $ComponentsFile
+    if ($raw) { $previous = @($raw.Trim() -split ',' | Where-Object { $KnownComponents.Contains($_) }) }
+}
+$selected = @(Get-SelectedComponents)
+
+# uninstall the packages of components that are no longer selected
+foreach ($name in @($previous | Where-Object { $selected -notcontains $_ })) {
+    $reqFile = Join-Path $RepoRoot $KnownComponents[$name].Requirements
+    $packages = @(Get-Content $reqFile | Where-Object { $_ -match '^[A-Za-z0-9]' } | ForEach-Object { ($_ -split '[=<>~! \[]')[0] })
+    Write-Host "Removing component '$name' ($($packages -join ', ')) ..."
+    & $VenvPython -m pip uninstall --disable-pip-version-check -q -y @packages
+    if ($name -eq 'browser') {
+        Write-Host "  The downloaded Chromium stays in $env:LOCALAPPDATA\ms-playwright (shared with other Playwright"
+        Write-Host '  programs); delete that folder yourself if nothing else needs it.'
+    }
+}
+Set-Content -Path $ComponentsFile -Value ($selected -join ',') -Encoding ascii
+foreach ($name in $selected) { $Requirements += Join-Path $RepoRoot $KnownComponents[$name].Requirements }
+
 $hash = Get-RequirementsHash
 $installed = if (Test-Path $RequirementsStamp) { (Get-Content -Raw $RequirementsStamp).Trim() } else { '' }
-if ($Update -or $hash -ne $installed) {
+if ($Update -or $Setup -or $hash -ne $installed) {
     Write-Host 'Installing requirements (this takes a minute the first time) ...'
     & $VenvPython -m pip install --disable-pip-version-check -q --upgrade pip
     if ($LASTEXITCODE -ne 0) { throw 'Upgrading pip failed.' }
@@ -107,7 +220,22 @@ if ($Update -or $hash -ne $installed) {
     foreach ($req in $Requirements) { $pipArgs += @('-r', $req) }
     & $VenvPython @pipArgs
     if ($LASTEXITCODE -ne 0) { throw 'Installing the requirements failed.' }
+
+    if ($selected -contains 'browser') {
+        Write-Host 'Downloading the headless Chromium browser for Playwright ...'
+        & $VenvPython -m playwright install --only-shell chromium
+        if ($LASTEXITCODE -ne 0) { throw 'Downloading the headless browser failed.' }
+    }
     Set-Content -Path $RequirementsStamp -Value $hash -Encoding ascii
+
+    if ($selected -contains 'mcp') {
+        $serverPy = Join-Path $RepoRoot 'searxng_mcp\server.py'
+        Write-Host ''
+        Write-Host "MCP server installed (components: $($selected -join ', ')). It is not registered anywhere;"
+        Write-Host 'to use it from Claude Code, run this yourself:'
+        Write-Host "  claude mcp add searxng -- `"$VenvPython`" `"$serverPy`""
+        Write-Host ''
+    }
 }
 
 # --- settings ---------------------------------------------------------------
